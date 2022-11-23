@@ -24,7 +24,7 @@ pub fn main() -> Result<(), String> {
     let video_subsystem = sdl_context.video()?;
 
     let window = video_subsystem
-        .window("Example", 800, 600)
+        .window("Snek", 800, 600)
         .position_centered()
         .opengl()
         .build()
