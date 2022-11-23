@@ -10,6 +10,10 @@ Just another minimal implementation of the snake game, this time using in Rust +
 4. `cargo run` it.
 5. **Enjoy!**
 
+Keybindings:
+- **WASD** to move
+- **Escape** to pause/unpause/restart.
+
 # The code
 - [./src/context.rs](./src/context.rs) - Controls the game state and mechanics.
 - [./src/renderer.rs](./src/renderer.rs) - Draws the game state into the sdl canvas.
