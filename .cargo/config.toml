@@ -1,2 +1,10 @@
+# Apple Silicon macOS with Homebrew-installed SDL2.
+# Remove or adjust this section if you are on a different platform/architecture.
+# Linux: SDL2 is typically found via pkg-config, no extra flags needed.
+# Windows: see https://github.com/Rust-SDL2/rust-sdl2#windows-msvc
 [target.aarch64-apple-darwin]
 rustflags = ["-L", "native=/opt/homebrew/lib"]
+
+# For Intel macOS with Homebrew, uncomment the following instead:
+# [target.x86_64-apple-darwin]
+# rustflags = ["-L", "native=/usr/local/lib"]

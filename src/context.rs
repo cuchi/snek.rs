@@ -6,9 +6,10 @@ pub enum GameState {
     Playing,
     Paused,
     Over,
+    Won,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum PlayerDirection {
     Up,
     Down,
@@ -16,7 +17,7 @@ pub enum PlayerDirection {
     Left,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Point(pub i32, pub i32);
 
 pub struct Context {
@@ -25,6 +26,7 @@ pub struct Context {
     pub player_direction: PlayerDirection,
     pub food: Option<Point>,
     pub board_size: Point,
+    pub score: u32,
     last_tick_direction: PlayerDirection,
     rng: ThreadRng,
 }
@@ -46,15 +48,20 @@ impl Context {
             last_tick_direction: PlayerDirection::Right,
             food: None,
             board_size: Point(40, 30),
+            score: 0,
             rng: rand::thread_rng(),
         }
     }
 
     pub fn next_tick(&mut self) {
+        if let GameState::Over | GameState::Paused | GameState::Won = self.state {
+            return;
+        }
         if self.food.is_none() {
             self.spawn_food();
         }
-        if let GameState::Over | GameState::Paused = self.state {
+        // If spawn_food failed (board full), state is now Won — exit
+        if let GameState::Won = self.state {
             return;
         }
         let head_position = self.player_position.first().unwrap();
@@ -73,6 +80,7 @@ impl Context {
         if matches!(self.food, Some(food) if food == next_head_position) {
             self.move_player(next_head_position, true);
             self.food = None;
+            self.score += 1;
             return;
         }
 
@@ -81,8 +89,9 @@ impl Context {
 
     fn spawn_food(&mut self) {
         let Point(size_x, size_y) = self.board_size;
+        let max_attempts = ((size_x - 2) * (size_y - 2)) as usize;
 
-        loop {
+        for _ in 0..max_attempts {
             let food = Point(
                 self.rng.gen_range(1..(size_x - 1)),
                 self.rng.gen_range(1..(size_y - 1)),
@@ -92,6 +101,9 @@ impl Context {
                 return;
             }
         }
+
+        // Board is full — player wins
+        self.state = GameState::Won;
     }
 
     fn move_player(&mut self, next_head_position: Point, grow: bool) {
@@ -145,12 +157,271 @@ impl Context {
         self.state = match self.state {
             GameState::Playing => GameState::Paused,
             GameState::Paused => GameState::Playing,
-            GameState::Over => {
+            GameState::Over | GameState::Won => {
                 self.player_position = vec![Point(20, 15), Point(19, 15), Point(18, 15)];
                 self.player_direction = PlayerDirection::Right;
                 self.last_tick_direction = PlayerDirection::Right;
+                self.food = None;
+                self.score = 0;
                 GameState::Playing
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn new_context() -> Context {
+        Context::new()
+    }
+
+    #[test]
+    fn starts_paused() {
+        let ctx = new_context();
+        assert!(matches!(ctx.state, GameState::Paused));
+    }
+
+    #[test]
+    fn starts_with_score_zero() {
+        let ctx = new_context();
+        assert_eq!(ctx.score, 0);
+    }
+
+    #[test]
+    fn starts_with_three_segments() {
+        let ctx = new_context();
+        assert_eq!(ctx.player_position.len(), 3);
+    }
+
+    #[test]
+    fn unpause_on_escape() {
+        let mut ctx = new_context();
+        ctx.toggle_pause();
+        assert!(matches!(ctx.state, GameState::Playing));
+    }
+
+    #[test]
+    fn pause_on_escape_when_playing() {
+        let mut ctx = new_context();
+        ctx.toggle_pause(); // unpause
+        ctx.toggle_pause(); // pause again
+        assert!(matches!(ctx.state, GameState::Paused));
+    }
+
+    #[test]
+    fn restart_on_escape_when_game_over() {
+        let mut ctx = new_context();
+        ctx.toggle_pause(); // start playing
+        ctx.state = GameState::Over;
+        ctx.score = 5;
+        ctx.toggle_pause(); // restart
+        assert!(matches!(ctx.state, GameState::Playing));
+        assert_eq!(ctx.score, 0);
+        assert_eq!(ctx.player_position.len(), 3);
+    }
+
+    #[test]
+    fn restart_on_escape_when_won() {
+        let mut ctx = new_context();
+        ctx.toggle_pause(); // start playing
+        ctx.state = GameState::Won;
+        ctx.score = 42;
+        ctx.toggle_pause(); // restart
+        assert!(matches!(ctx.state, GameState::Playing));
+        assert_eq!(ctx.score, 0);
+    }
+
+    #[test]
+    fn cannot_reverse_up_into_down() {
+        let mut ctx = new_context();
+        ctx.player_direction = PlayerDirection::Down;
+        ctx.last_tick_direction = PlayerDirection::Down;
+        ctx.move_up();
+        assert_eq!(ctx.player_direction, PlayerDirection::Down);
+    }
+
+    #[test]
+    fn cannot_reverse_down_into_up() {
+        let mut ctx = new_context();
+        ctx.player_direction = PlayerDirection::Up;
+        ctx.last_tick_direction = PlayerDirection::Up;
+        ctx.move_down();
+        assert_eq!(ctx.player_direction, PlayerDirection::Up);
+    }
+
+    #[test]
+    fn cannot_reverse_left_into_right() {
+        let mut ctx = new_context();
+        ctx.player_direction = PlayerDirection::Right;
+        ctx.last_tick_direction = PlayerDirection::Right;
+        ctx.move_left();
+        assert_eq!(ctx.player_direction, PlayerDirection::Right);
+    }
+
+    #[test]
+    fn cannot_reverse_right_into_left() {
+        let mut ctx = new_context();
+        ctx.player_direction = PlayerDirection::Left;
+        ctx.last_tick_direction = PlayerDirection::Left;
+        ctx.move_right();
+        assert_eq!(ctx.player_direction, PlayerDirection::Left);
+    }
+
+    #[test]
+    fn wall_collision_left() {
+        let ctx = Context {
+            player_position: vec![Point(1, 15)],
+            board_size: Point(40, 30),
+            ..new_context()
+        };
+        // Moving left into x=0 (wall)
+        assert!(ctx.is_game_over(Point(0, 15)));
+    }
+
+    #[test]
+    fn wall_collision_top() {
+        let ctx = Context {
+            player_position: vec![Point(10, 1)],
+            board_size: Point(40, 30),
+            ..new_context()
+        };
+        assert!(ctx.is_game_over(Point(10, 0)));
+    }
+
+    #[test]
+    fn wall_collision_right() {
+        let ctx = Context {
+            player_position: vec![Point(38, 15)],
+            board_size: Point(40, 30),
+            ..new_context()
+        };
+        // x_size - 1 = 39, so x=39 is a wall
+        assert!(ctx.is_game_over(Point(39, 15)));
+    }
+
+    #[test]
+    fn wall_collision_bottom() {
+        let ctx = Context {
+            player_position: vec![Point(10, 28)],
+            board_size: Point(40, 30),
+            ..new_context()
+        };
+        // y_size - 1 = 29, so y=29 is a wall
+        assert!(ctx.is_game_over(Point(10, 29)));
+    }
+
+    #[test]
+    fn self_collision() {
+        let ctx = Context {
+            player_position: vec![Point(10, 10), Point(11, 10), Point(12, 10)],
+            board_size: Point(40, 30),
+            ..new_context()
+        };
+        // Head moves into the second segment
+        assert!(ctx.is_game_over(Point(11, 10)));
+    }
+
+    #[test]
+    fn no_collision_in_open_space() {
+        let ctx = Context {
+            player_position: vec![Point(10, 10)],
+            board_size: Point(40, 30),
+            ..new_context()
+        };
+        assert!(!ctx.is_game_over(Point(11, 10)));
+    }
+
+    #[test]
+    fn food_spawns_not_on_snake() {
+        let mut ctx = new_context();
+        ctx.player_position = (0..10).map(|i| Point(5 + i, 15)).collect();
+        ctx.spawn_food();
+        assert!(ctx.food.is_some());
+        let food = ctx.food.unwrap();
+        assert!(!ctx.player_position.contains(&food));
+    }
+
+    #[test]
+    fn food_not_spawned_on_walls() {
+        let mut ctx = new_context();
+        for _ in 0..100 {
+            ctx.food = None;
+            ctx.spawn_food();
+            let food = ctx.food.unwrap();
+            assert!(food.0 > 0 && food.0 < ctx.board_size.0 - 1);
+            assert!(food.1 > 0 && food.1 < ctx.board_size.1 - 1);
+        }
+    }
+
+    #[test]
+    fn game_over_when_board_full() {
+        let mut ctx = Context {
+            board_size: Point(6, 5), // 4x3 = 12 interior cells
+            player_position: vec![],
+            ..new_context()
+        };
+        // Fill all interior cells except one (which will be the head)
+        // Interior: x in 1..5, y in 1..4 → 4 * 3 = 12 cells
+        for x in 1..5 {
+            for y in 1..4 {
+                ctx.player_position.push(Point(x, y));
+            }
+        }
+        // All 12 cells are occupied — spawn_food should fail and declare Won
+        ctx.state = GameState::Playing;
+        ctx.food = None;
+        ctx.spawn_food();
+        assert!(matches!(ctx.state, GameState::Won));
+        assert!(ctx.food.is_none());
+    }
+
+    #[test]
+    fn eating_food_increases_score() {
+        let mut ctx = new_context();
+        ctx.toggle_pause(); // start playing
+        ctx.state = GameState::Playing;
+        // Place food directly in front of the snake
+        ctx.player_position = vec![Point(10, 10), Point(9, 10), Point(8, 10)];
+        ctx.player_direction = PlayerDirection::Right;
+        ctx.last_tick_direction = PlayerDirection::Right;
+        ctx.food = Some(Point(11, 10));
+        ctx.next_tick();
+        assert_eq!(ctx.score, 1);
+    }
+
+    #[test]
+    fn eating_food_grows_snake() {
+        let mut ctx = new_context();
+        ctx.toggle_pause();
+        ctx.state = GameState::Playing;
+        ctx.player_position = vec![Point(10, 10), Point(9, 10), Point(8, 10)];
+        ctx.player_direction = PlayerDirection::Right;
+        ctx.last_tick_direction = PlayerDirection::Right;
+        ctx.food = Some(Point(11, 10));
+        let len_before = ctx.player_position.len();
+        ctx.next_tick();
+        assert_eq!(ctx.player_position.len(), len_before + 1);
+    }
+
+    #[test]
+    fn tick_does_nothing_when_paused() {
+        let mut ctx = new_context();
+        // Still paused from new()
+        ctx.player_position = vec![Point(10, 10), Point(9, 10), Point(8, 10)];
+        let pos_before = ctx.player_position.clone();
+        ctx.next_tick();
+        assert_eq!(ctx.player_position, pos_before);
+    }
+
+    #[test]
+    fn tick_does_nothing_when_game_over() {
+        let mut ctx = new_context();
+        ctx.state = GameState::Over;
+        ctx.player_position = vec![Point(10, 10)];
+        let pos_before = ctx.player_position.clone();
+        ctx.next_tick();
+        assert_eq!(ctx.player_position, pos_before);
     }
 }

@@ -25,7 +25,7 @@ This document tracks findings from the code review and the roadmap for future fe
 | 3 | `src/renderer.rs` | `?` in draw loops bails early without `canvas.present()` | `draw()` collects all sub-draw results and calls `canvas.present()` unconditionally before propagating the error |
 | 4 | `src/main.rs` | Fixed `thread::sleep` can drift | Replaced with a delta-time accumulator (`Instant`-based) with fixed tick steps |
 | 5 | — | Zero tests | Added 24 unit tests covering: direction reversals, wall/self collision, food spawning, score, game state transitions, pause/restart, board-full win condition |
-| 6 | — | No score tracking or display | Added `score: u32` field to `Context`; displayed in window title bar via `canvas.window_mut().set_title()` |
+| 6 | — | No score tracking or display | Added `score: u32` field to `Context`; on-canvas pixel-font rendering with colour-coded states |
 | 7 | `.cargo/config.toml` | Hardcoded Apple Silicon path breaks other platforms | Added comments documenting platform setup, including Intel Mac fallback |
 
 ---
@@ -34,9 +34,10 @@ This document tracks findings from the code review and the roadmap for future fe
 
 ### P1 — High Priority
 
-- [ ] **Visual score rendering on canvas**
-  - Replace window-title score with on-screen text (SDL2_ttf or bitmap digits).
-  - _Effort: Small_
+- [x] **Visual score rendering on canvas**
+  - 3×5 pixel-font digits drawn with `fill_rect`, centred in a 30px HUD bar above the board.
+  - Score colour changes on game-over (red) and win (green).
+  - No extra dependencies (no SDL2_ttf needed).
 
 - [ ] **Speed increases as snake grows**
   - Reduce tick interval after each food eaten.
