@@ -24,7 +24,7 @@ This document tracks findings from the code review and the roadmap for future fe
 | 2 | `src/renderer.rs` | `draw_walls` draws corner tiles twice | Vertical wall loop now uses `1..(y_size - 1)` to skip corners |
 | 3 | `src/renderer.rs` | `?` in draw loops bails early without `canvas.present()` | `draw()` collects all sub-draw results and calls `canvas.present()` unconditionally before propagating the error |
 | 4 | `src/main.rs` | Fixed `thread::sleep` can drift | Replaced with a delta-time accumulator (`Instant`-based) with fixed tick steps |
-| 5 | — | Zero tests | Added 28 unit tests covering: direction reversals, wall/self collision, food spawning, score, game state transitions, pause/restart, board-full win condition, speed curve |
+| 5 | — | Zero tests | Added 30 unit tests covering: direction reversals, wall/self collision, food spawning, score, game state transitions, pause/restart, board-full win condition, speed curve, tick event returns |
 | 6 | — | No score tracking or display | Added `score: u32` field to `Context`; on-canvas pixel-font rendering with colour-coded states |
 | 7 | `.cargo/config.toml` | Hardcoded Apple Silicon path breaks other platforms | Added comments documenting platform setup, including Intel Mac fallback |
 
@@ -52,10 +52,12 @@ This document tracks findings from the code review and the roadmap for future fe
   - Top-5 list rendered as a pixel-font overlay centred on the board during game-over/win screens.
   - Refactored pixel-font digit drawing into reusable helpers (`draw_digit`, `draw_number`, `digits_of`, `number_pixel_width`).
 
-- [ ] **Sound effects**
-  - Add SDL2_mixer dependency.
-  - Eat-food sound, death sound.
-  - _Effort: Medium_
+- [x] **Sound effects**
+  - New `src/audio.rs` module using SDL2_mixer.
+  - WAV data generated programmatically (no asset files): rising chirp (eat), descending buzz (death), ascending fanfare (win).
+  - `Context::next_tick()` now returns a `TickEvent` enum (`None`/`Ate`/`Died`/`Won`) so `main.rs` can react and play the appropriate sound.
+  - 2 new tests verify tick event return values.
+  - Requires `sdl2_mixer` system library (`brew install sdl2_mixer` on macOS).
 
 ### P3 — Nice-to-Have
 

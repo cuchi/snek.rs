@@ -22,6 +22,15 @@ pub enum PlayerDirection {
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Point(pub i32, pub i32);
 
+/// Events that a tick can produce, so the caller can react (e.g. play audio).
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum TickEvent {
+    None,
+    Ate,
+    Died,
+    Won,
+}
+
 pub struct Context {
     pub state: GameState,
     pub player_position: Vec<Point>,
@@ -64,17 +73,19 @@ impl Context {
         200u64.saturating_sub(reduction).max(60)
     }
 
-    pub fn next_tick(&mut self) {
+    /// Advance the simulation by one tick.
+    /// Returns a [`TickEvent`] describing what happened.
+    pub fn next_tick(&mut self) -> TickEvent {
         if let GameState::Over | GameState::Paused | GameState::Won = self.state {
-            return;
+            return TickEvent::None;
         }
         if self.food.is_none() {
             self.spawn_food();
         }
-        // If spawn_food failed (board full), state is now Won — persist & exit
+        // If spawn_food failed (board full), state is now Won
         if let GameState::Won = self.state {
             high_scores::maybe_insert(self.score, &mut self.high_scores);
-            return;
+            return TickEvent::Won;
         }
         let head_position = self.player_position.first().unwrap();
         let next_head_position = match self.player_direction {
@@ -87,17 +98,18 @@ impl Context {
         if self.is_game_over(next_head_position) {
             self.state = GameState::Over;
             high_scores::maybe_insert(self.score, &mut self.high_scores);
-            return;
+            return TickEvent::Died;
         }
 
         if matches!(self.food, Some(food) if food == next_head_position) {
             self.move_player(next_head_position, true);
             self.food = None;
             self.score += 1;
-            return;
+            return TickEvent::Ate;
         }
 
         self.move_player(next_head_position, false);
+        TickEvent::None
     }
 
     fn spawn_food(&mut self) {
@@ -289,7 +301,6 @@ mod tests {
             board_size: Point(40, 30),
             ..new_context()
         };
-        // Moving left into x=0 (wall)
         assert!(ctx.is_game_over(Point(0, 15)));
     }
 
@@ -310,7 +321,6 @@ mod tests {
             board_size: Point(40, 30),
             ..new_context()
         };
-        // x_size - 1 = 39, so x=39 is a wall
         assert!(ctx.is_game_over(Point(39, 15)));
     }
 
@@ -321,7 +331,6 @@ mod tests {
             board_size: Point(40, 30),
             ..new_context()
         };
-        // y_size - 1 = 29, so y=29 is a wall
         assert!(ctx.is_game_over(Point(10, 29)));
     }
 
@@ -332,7 +341,6 @@ mod tests {
             board_size: Point(40, 30),
             ..new_context()
         };
-        // Head moves into the second segment
         assert!(ctx.is_game_over(Point(11, 10)));
     }
 
@@ -371,7 +379,7 @@ mod tests {
     #[test]
     fn game_over_when_board_full() {
         let mut ctx = Context {
-            board_size: Point(6, 5), // 4x3 = 12 interior cells
+            board_size: Point(6, 5),
             player_position: vec![],
             ..new_context()
         };
@@ -396,8 +404,9 @@ mod tests {
         ctx.player_direction = PlayerDirection::Right;
         ctx.last_tick_direction = PlayerDirection::Right;
         ctx.food = Some(Point(11, 10));
-        ctx.next_tick();
+        let event = ctx.next_tick();
         assert_eq!(ctx.score, 1);
+        assert_eq!(event, TickEvent::Ate);
     }
 
     #[test]
@@ -419,7 +428,8 @@ mod tests {
         let mut ctx = new_context();
         ctx.player_position = vec![Point(10, 10), Point(9, 10), Point(8, 10)];
         let pos_before = ctx.player_position.clone();
-        ctx.next_tick();
+        let event = ctx.next_tick();
+        assert_eq!(event, TickEvent::None);
         assert_eq!(ctx.player_position, pos_before);
     }
 
@@ -429,8 +439,34 @@ mod tests {
         ctx.state = GameState::Over;
         ctx.player_position = vec![Point(10, 10)];
         let pos_before = ctx.player_position.clone();
-        ctx.next_tick();
+        let event = ctx.next_tick();
+        assert_eq!(event, TickEvent::None);
         assert_eq!(ctx.player_position, pos_before);
+    }
+
+    #[test]
+    fn tick_returns_died_on_collision() {
+        let mut ctx = new_context();
+        ctx.toggle_pause();
+        ctx.state = GameState::Playing;
+        ctx.player_position = vec![Point(1, 15)];
+        ctx.player_direction = PlayerDirection::Left;
+        ctx.last_tick_direction = PlayerDirection::Left;
+        let event = ctx.next_tick();
+        assert_eq!(event, TickEvent::Died);
+        assert!(matches!(ctx.state, GameState::Over));
+    }
+
+    #[test]
+    fn tick_returns_none_on_normal_move() {
+        let mut ctx = new_context();
+        ctx.toggle_pause();
+        ctx.state = GameState::Playing;
+        ctx.player_position = vec![Point(10, 10)];
+        ctx.player_direction = PlayerDirection::Right;
+        ctx.last_tick_direction = PlayerDirection::Right;
+        let event = ctx.next_tick();
+        assert_eq!(event, TickEvent::None);
     }
 
     // --- speed curve tests ---
