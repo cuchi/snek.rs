@@ -24,7 +24,7 @@ This document tracks findings from the code review and the roadmap for future fe
 | 2 | `src/renderer.rs` | `draw_walls` draws corner tiles twice | Vertical wall loop now uses `1..(y_size - 1)` to skip corners |
 | 3 | `src/renderer.rs` | `?` in draw loops bails early without `canvas.present()` | `draw()` collects all sub-draw results and calls `canvas.present()` unconditionally before propagating the error |
 | 4 | `src/main.rs` | Fixed `thread::sleep` can drift | Replaced with a delta-time accumulator (`Instant`-based) with fixed tick steps |
-| 5 | — | Zero tests | Added 24 unit tests covering: direction reversals, wall/self collision, food spawning, score, game state transitions, pause/restart, board-full win condition |
+| 5 | — | Zero tests | Added 28 unit tests covering: direction reversals, wall/self collision, food spawning, score, game state transitions, pause/restart, board-full win condition, speed curve |
 | 6 | — | No score tracking or display | Added `score: u32` field to `Context`; on-canvas pixel-font rendering with colour-coded states |
 | 7 | `.cargo/config.toml` | Hardcoded Apple Silicon path breaks other platforms | Added comments documenting platform setup, including Intel Mac fallback |
 
@@ -39,9 +39,10 @@ This document tracks findings from the code review and the roadmap for future fe
   - Score colour changes on game-over (red) and win (green).
   - No extra dependencies (no SDL2_ttf needed).
 
-- [ ] **Speed increases as snake grows**
-  - Reduce tick interval after each food eaten.
-  - _Effort: Small_
+- [x] **Speed increases as snake grows**
+  - `Context::tick_duration_ms()` decreases by 8 ms per food eaten, from 200 ms down to a 60 ms floor.
+  - Main loop re-reads the tick duration dynamically every iteration.
+  - 4 new tests verify the speed curve and floor behaviour.
 
 ### P2 — Medium Priority
 

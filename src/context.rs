@@ -53,6 +53,13 @@ impl Context {
         }
     }
 
+    /// Tick interval in milliseconds. Starts at 200 ms and decreases
+    /// by 8 ms per food eaten, with a floor of 60 ms.
+    pub fn tick_duration_ms(&self) -> u64 {
+        let reduction = (self.score as u64).saturating_mul(8);
+        200u64.saturating_sub(reduction).max(60)
+    }
+
     pub fn next_tick(&mut self) {
         if let GameState::Over | GameState::Paused | GameState::Won = self.state {
             return;
@@ -423,5 +430,37 @@ mod tests {
         let pos_before = ctx.player_position.clone();
         ctx.next_tick();
         assert_eq!(ctx.player_position, pos_before);
+    }
+
+    // --- speed curve tests ---
+
+    #[test]
+    fn tick_duration_starts_at_200ms() {
+        let ctx = new_context();
+        assert_eq!(ctx.tick_duration_ms(), 200);
+    }
+
+    #[test]
+    fn tick_duration_decreases_with_score() {
+        let mut ctx = new_context();
+        ctx.score = 5; // 5 * 8 = 40ms reduction → 160ms
+        assert_eq!(ctx.tick_duration_ms(), 160);
+    }
+
+    #[test]
+    fn tick_duration_respects_floor() {
+        let mut ctx = new_context();
+        ctx.score = 100; // 100 * 8 = 800ms reduction → would be negative, floor at 60
+        assert_eq!(ctx.tick_duration_ms(), 60);
+    }
+
+    #[test]
+    fn tick_duration_at_exact_floor_boundary() {
+        let mut ctx = new_context();
+        // 200 - score*8 = 60 → score = (200-60)/8 = 17.5 → at score 17: 200-136=64, at score 18: 200-144=56→60
+        ctx.score = 17;
+        assert_eq!(ctx.tick_duration_ms(), 64);
+        ctx.score = 18;
+        assert_eq!(ctx.tick_duration_ms(), 60);
     }
 }

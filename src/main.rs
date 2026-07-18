@@ -11,8 +11,6 @@ use context::Context;
 use renderer::Renderer;
 
 pub fn main() -> Result<(), String> {
-    // 5 game ticks per second, rendered at up to ~60 FPS
-    let tick_duration = Duration::from_millis(200);
     let max_frame_duration = Duration::new(0, 1_000_000_000u32 / 60);
 
     let sdl_context = sdl2::init()?;
@@ -65,10 +63,14 @@ pub fn main() -> Result<(), String> {
             }
         }
 
-        // Consume accumulated time in fixed tick steps. If the game was
-        // paused or a frame took unusually long, we catch up without
-        // spiraling (capped implicitly by the accumulator).
-        while accumulator >= tick_duration {
+        // Consume accumulated time in variable-length tick steps.
+        // Tick duration decreases as score increases, so we re-read
+        // it on every iteration of the loop.
+        loop {
+            let tick_duration = Duration::from_millis(game_context.tick_duration_ms());
+            if accumulator < tick_duration {
+                break;
+            }
             game_context.next_tick();
             accumulator -= tick_duration;
         }
