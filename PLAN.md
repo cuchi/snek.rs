@@ -46,10 +46,11 @@ This document tracks findings from the code review and the roadmap for future fe
 
 ### P2 — Medium Priority
 
-- [ ] **High-score persistence**
-  - Write top scores to a local file (`~/.snek_highscores`).
-  - Display top 5 scores on game over.
-  - _Effort: Medium_
+- [x] **High-score persistence**
+  - New `src/high_scores.rs` module: loads/saves top-5 scores to `~/.snek_highscores`.
+  - Scores are persisted on game-over and when the board fills (win).
+  - Top-5 list rendered as a pixel-font overlay centred on the board during game-over/win screens.
+  - Refactored pixel-font digit drawing into reusable helpers (`draw_digit`, `draw_number`, `digits_of`, `number_pixel_width`).
 
 - [ ] **Sound effects**
   - Add SDL2_mixer dependency.

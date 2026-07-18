@@ -2,6 +2,8 @@ use std::ops::Add;
 
 use rand::{rngs::ThreadRng, Rng};
 
+use crate::high_scores;
+
 pub enum GameState {
     Playing,
     Paused,
@@ -27,6 +29,7 @@ pub struct Context {
     pub food: Option<Point>,
     pub board_size: Point,
     pub score: u32,
+    pub high_scores: Vec<u32>,
     last_tick_direction: PlayerDirection,
     rng: ThreadRng,
 }
@@ -49,6 +52,7 @@ impl Context {
             food: None,
             board_size: Point(40, 30),
             score: 0,
+            high_scores: high_scores::load(),
             rng: rand::thread_rng(),
         }
     }
@@ -67,8 +71,9 @@ impl Context {
         if self.food.is_none() {
             self.spawn_food();
         }
-        // If spawn_food failed (board full), state is now Won — exit
+        // If spawn_food failed (board full), state is now Won — persist & exit
         if let GameState::Won = self.state {
+            high_scores::maybe_insert(self.score, &mut self.high_scores);
             return;
         }
         let head_position = self.player_position.first().unwrap();
@@ -81,6 +86,7 @@ impl Context {
 
         if self.is_game_over(next_head_position) {
             self.state = GameState::Over;
+            high_scores::maybe_insert(self.score, &mut self.high_scores);
             return;
         }
 
@@ -369,14 +375,11 @@ mod tests {
             player_position: vec![],
             ..new_context()
         };
-        // Fill all interior cells except one (which will be the head)
-        // Interior: x in 1..5, y in 1..4 → 4 * 3 = 12 cells
         for x in 1..5 {
             for y in 1..4 {
                 ctx.player_position.push(Point(x, y));
             }
         }
-        // All 12 cells are occupied — spawn_food should fail and declare Won
         ctx.state = GameState::Playing;
         ctx.food = None;
         ctx.spawn_food();
@@ -387,9 +390,8 @@ mod tests {
     #[test]
     fn eating_food_increases_score() {
         let mut ctx = new_context();
-        ctx.toggle_pause(); // start playing
+        ctx.toggle_pause();
         ctx.state = GameState::Playing;
-        // Place food directly in front of the snake
         ctx.player_position = vec![Point(10, 10), Point(9, 10), Point(8, 10)];
         ctx.player_direction = PlayerDirection::Right;
         ctx.last_tick_direction = PlayerDirection::Right;
@@ -415,7 +417,6 @@ mod tests {
     #[test]
     fn tick_does_nothing_when_paused() {
         let mut ctx = new_context();
-        // Still paused from new()
         ctx.player_position = vec![Point(10, 10), Point(9, 10), Point(8, 10)];
         let pos_before = ctx.player_position.clone();
         ctx.next_tick();
@@ -443,21 +444,20 @@ mod tests {
     #[test]
     fn tick_duration_decreases_with_score() {
         let mut ctx = new_context();
-        ctx.score = 5; // 5 * 8 = 40ms reduction → 160ms
+        ctx.score = 5;
         assert_eq!(ctx.tick_duration_ms(), 160);
     }
 
     #[test]
     fn tick_duration_respects_floor() {
         let mut ctx = new_context();
-        ctx.score = 100; // 100 * 8 = 800ms reduction → would be negative, floor at 60
+        ctx.score = 100;
         assert_eq!(ctx.tick_duration_ms(), 60);
     }
 
     #[test]
     fn tick_duration_at_exact_floor_boundary() {
         let mut ctx = new_context();
-        // 200 - score*8 = 60 → score = (200-60)/8 = 17.5 → at score 17: 200-136=64, at score 18: 200-144=56→60
         ctx.score = 17;
         assert_eq!(ctx.tick_duration_ms(), 64);
         ctx.score = 18;

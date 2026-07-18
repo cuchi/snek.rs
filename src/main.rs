@@ -5,6 +5,7 @@ use sdl2::keyboard::Keycode;
 use std::time::{Duration, Instant};
 
 mod context;
+mod high_scores;
 mod renderer;
 
 use context::Context;
@@ -63,9 +64,6 @@ pub fn main() -> Result<(), String> {
             }
         }
 
-        // Consume accumulated time in variable-length tick steps.
-        // Tick duration decreases as score increases, so we re-read
-        // it on every iteration of the loop.
         loop {
             let tick_duration = Duration::from_millis(game_context.tick_duration_ms());
             if accumulator < tick_duration {
@@ -77,7 +75,6 @@ pub fn main() -> Result<(), String> {
 
         game_renderer.draw(&game_context)?;
 
-        // Sleep the remainder of the frame to avoid busy-waiting
         let elapsed = last_frame.elapsed();
         if elapsed < max_frame_duration {
             ::std::thread::sleep(max_frame_duration - elapsed);
