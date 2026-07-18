@@ -87,7 +87,7 @@ impl Context {
                 self.rng.gen_range(1..(size_x - 1)),
                 self.rng.gen_range(1..(size_y - 1)),
             );
-            if !self.player_position.iter().any(|dot| *dot == food) {
+            if !self.player_position.contains(&food) {
                 self.food = Some(food);
                 return;
             }
@@ -98,9 +98,7 @@ impl Context {
         if !grow {
             self.player_position.pop();
         }
-        self.player_position.reverse();
-        self.player_position.push(next_head_position);
-        self.player_position.reverse();
+        self.player_position.insert(0, next_head_position);
         self.last_tick_direction = self.player_direction;
     }
 
@@ -132,7 +130,7 @@ impl Context {
         self.player_direction = PlayerDirection::Left;
     }
 
-    fn is_game_over(&mut self, next_head_position: Point) -> bool {
+    fn is_game_over(&self, next_head_position: Point) -> bool {
         let Point(x, y) = next_head_position;
         let Point(x_size, y_size) = self.board_size;
 
@@ -140,10 +138,7 @@ impl Context {
             || y == 0
             || x == x_size - 1
             || y == y_size - 1
-            || self
-                .player_position
-                .iter()
-                .any(|point| *point == next_head_position)
+            || self.player_position.contains(&next_head_position)
     }
 
     pub fn toggle_pause(&mut self) {

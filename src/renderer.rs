@@ -15,11 +15,15 @@ impl Renderer {
     pub fn new(window: Window) -> Result<Renderer, String> {
         let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
 
+        let dot_size: i32 = 20;
+        let dot_padding: i32 = 2;
+        let padded_dot_size: u32 = (dot_size - 2 * dot_padding) as u32;
+
         Ok(Renderer {
             canvas,
-            dot_size: 20,
-            dot_padding: 2,
-            padded_dot_size: 18,
+            dot_size,
+            dot_padding,
+            padded_dot_size,
         })
     }
 

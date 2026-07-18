@@ -10,15 +10,10 @@ mod renderer;
 use context::Context;
 use renderer::Renderer;
 
-const KEY_W: Option<Keycode> = Some(Keycode::W);
-const KEY_A: Option<Keycode> = Some(Keycode::A);
-const KEY_S: Option<Keycode> = Some(Keycode::S);
-const KEY_D: Option<Keycode> = Some(Keycode::D);
-const KEY_ESC: Option<Keycode> = Some(Keycode::Escape);
-
 pub fn main() -> Result<(), String> {
+    // 30 FPS rendering, game logic ticks every 6th frame = 5 ticks/sec
     let frame_duration = Duration::new(0, 1_000_000_000u32 / 30);
-    let frames_per_tick = 6; // 5 ticks per second
+    let frames_per_tick: u64 = 6;
 
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
@@ -40,18 +35,31 @@ pub fn main() -> Result<(), String> {
             match event {
                 Event::Quit { .. } => break 'running,
                 Event::KeyDown {
-                    keycode: KEY_ESC, ..
+                    keycode: Some(Keycode::Escape),
+                    ..
                 } => game_context.toggle_pause(),
-                Event::KeyDown { keycode: KEY_W, .. } => game_context.move_up(),
-                Event::KeyDown { keycode: KEY_S, .. } => game_context.move_down(),
-                Event::KeyDown { keycode: KEY_D, .. } => game_context.move_right(),
-                Event::KeyDown { keycode: KEY_A, .. } => game_context.move_left(),
+                Event::KeyDown {
+                    keycode: Some(Keycode::W),
+                    ..
+                } => game_context.move_up(),
+                Event::KeyDown {
+                    keycode: Some(Keycode::S),
+                    ..
+                } => game_context.move_down(),
+                Event::KeyDown {
+                    keycode: Some(Keycode::D),
+                    ..
+                } => game_context.move_right(),
+                Event::KeyDown {
+                    keycode: Some(Keycode::A),
+                    ..
+                } => game_context.move_left(),
                 _ => {}
             }
         }
 
         ::std::thread::sleep(frame_duration);
-        if frame_counter % frames_per_tick == 0 {
+        if frame_counter.is_multiple_of(frames_per_tick) {
             game_context.next_tick();
         }
         game_renderer.draw(&game_context)?;
